@@ -1,0 +1,8 @@
+# fantasy first names
+#
+# try it with:
+#   cargo run -- examples/fantasy.namegen --count 20
+
+name = <syllable><syllable> | <syllable><syllable><syllable> | <syllable>'<syllable>
+
+syllable = ka|ke|ki|ko|ku|ra|re|ri|ro|ru|sha|shi|tha|thi|zar|zan|dun|dan|mor|mir|fen|fal|bry|gor|nal|vess
