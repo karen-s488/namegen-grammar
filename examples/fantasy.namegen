@@ -3,6 +3,6 @@
 # try it with:
 #   cargo run -- examples/fantasy.namegen --count 20
 
-name = <syllable><syllable> | <syllable><syllable><syllable> | <syllable>'<syllable>
+name = <syllable><syllable>:5 | <syllable><syllable><syllable>:3 | <syllable>'<syllable>:1
 
 syllable = ka|ke|ki|ko|ku|ra|re|ri|ro|ru|sha|shi|tha|thi|zar|zan|dun|dan|mor|mir|fen|fal|bry|gor|nal|vess

@@ -5,9 +5,11 @@
 //   rule_name = alternative | alternative | alternative
 //
 // An alternative is plain text that may contain <other_rule> references,
-// which get expanded recursively at generation time. Every error carries
-// the exact line and column of the character that caused it, plus the
-// source line itself, so a typo points straight back at the file.
+// which get expanded recursively at generation time. An alternative may
+// end in `:N` to weight it N times as heavily as an unweighted one, e.g.
+// `common:5 | rare`. Every error carries the exact line and column of the
+// character that caused it, plus the source line itself, so a typo points
+// straight back at the file.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -26,6 +28,7 @@ pub struct Rule {
 #[derive(Debug)]
 pub struct Alternative {
     pub parts: Vec<Part>,
+    pub weight: u32,
 }
 
 #[derive(Debug)]
@@ -177,11 +180,59 @@ fn parse_body(
         }
 
         let trimmed_col_offset = seg_col_offset + leading_ws;
-        let parts = parse_parts(trimmed, trimmed_col_offset, line_no, raw_line)?;
-        alternatives.push(Alternative { parts });
+        let (text, weight) = split_weight(trimmed, trimmed_col_offset, line_no, raw_line)?;
+        let parts = parse_parts(text, trimmed_col_offset, line_no, raw_line)?;
+        alternatives.push(Alternative { parts, weight });
     }
 
     Ok(alternatives)
+}
+
+// An alternative may end in `:N` to make it N times as likely as a plain
+// (unweighted) alternative, e.g. `common:5 | rare`. The ':' only counts as
+// a weight separator when it sits outside any `<...>` reference and is
+// followed by nothing but digits, so ordinary text and reference names
+// containing ':' are left alone.
+fn split_weight<'a>(
+    text: &'a str,
+    col_offset: usize,
+    line_no: usize,
+    raw_line: &str,
+) -> Result<(&'a str, u32), GrammarError> {
+    let bytes = text.as_bytes();
+    let mut digit_start = text.len();
+    while digit_start > 0 && bytes[digit_start - 1].is_ascii_digit() {
+        digit_start -= 1;
+    }
+
+    if digit_start == text.len() || digit_start == 0 || bytes[digit_start - 1] != b':' {
+        return Ok((text, 1));
+    }
+    let colon_pos = digit_start - 1;
+
+    let prefix = &text[..colon_pos];
+    if prefix.matches('<').count() != prefix.matches('>').count() {
+        // The ':' is inside an unterminated reference, not a weight.
+        return Ok((text, 1));
+    }
+
+    let digits = &text[digit_start..];
+    let weight: u32 = digits.parse().map_err(|_| GrammarError {
+        line: line_no,
+        column: col_offset + digit_start + 1,
+        message: format!("alternative weight '{digits}' is too large"),
+        line_text: raw_line.to_string(),
+    })?;
+    if weight == 0 {
+        return Err(GrammarError {
+            line: line_no,
+            column: col_offset + digit_start + 1,
+            message: "alternative weight must be at least 1".to_string(),
+            line_text: raw_line.to_string(),
+        });
+    }
+
+    Ok((&text[..colon_pos], weight))
 }
 
 fn parse_parts(

@@ -35,8 +35,19 @@ impl Rng {
         z ^ (z >> 31)
     }
 
-    fn gen_range(&mut self, upper: usize) -> usize {
-        (self.next_u64() % upper as u64) as usize
+    // Picks an index with probability proportional to its weight. `weights`
+    // must be non-empty and every entry at least 1, which parsing already
+    // guarantees for a rule's alternatives.
+    fn weighted_index(&mut self, weights: &[u32]) -> usize {
+        let total: u64 = weights.iter().map(|&w| w as u64).sum();
+        let mut target = self.next_u64() % total;
+        for (i, &w) in weights.iter().enumerate() {
+            if target < w as u64 {
+                return i;
+            }
+            target -= w as u64;
+        }
+        weights.len() - 1
     }
 }
 
@@ -63,7 +74,8 @@ fn expand(
         .rules
         .get(rule_name)
         .expect("grammar was resolved, so every reference points at a real rule");
-    let alt = &rule.alternatives[rng.gen_range(rule.alternatives.len())];
+    let weights: Vec<u32> = rule.alternatives.iter().map(|a| a.weight).collect();
+    let alt = &rule.alternatives[rng.weighted_index(&weights)];
 
     for part in &alt.parts {
         match part {

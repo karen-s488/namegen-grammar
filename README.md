@@ -24,6 +24,16 @@ Each alternative is plain text that can reference another rule with
 picks one alternative at random. Lines starting with `#` are comments;
 blank lines are ignored.
 
+An alternative can end in `:N` to make it N times as likely to be picked
+as a plain alternative, which otherwise has a weight of 1:
+
+```
+size = small:5 | medium:3 | large | enormous:1
+```
+
+Here `small` is picked five times as often as `large`, and `large` and
+`enormous` are equally likely.
+
 Example (`examples/fantasy.namegen`):
 
 ```
@@ -77,6 +87,6 @@ cargo build --release
 
 ## Status
 
-Early. The grammar format above is all that's implemented. Weighted
-alternatives, character-class shorthands, and casing flags are next - see
-the issues, or just read `src/grammar.rs`.
+Early. The grammar format above, including weighted alternatives, is what's
+implemented so far. Character-class shorthands and casing flags are next -
+see the issues, or just read `src/grammar.rs`.
