@@ -49,6 +49,12 @@ impl Rng {
         }
         weights.len() - 1
     }
+
+    // Picks a uniformly random index in `0..len`. `len` must be non-zero,
+    // which parsing already guarantees for a character class.
+    fn uniform_index(&mut self, len: usize) -> usize {
+        (self.next_u64() % len as u64) as usize
+    }
 }
 
 pub fn generate(grammar: &Grammar, start: &str, rng: &mut Rng) -> Result<String, String> {
@@ -81,6 +87,7 @@ fn expand(
         match part {
             Part::Literal(text) => out.push_str(text),
             Part::Reference { name, .. } => expand(grammar, name, rng, out, depth + 1)?,
+            Part::CharClass(chars) => out.push(chars[rng.uniform_index(chars.len())]),
         }
     }
 

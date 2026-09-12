@@ -5,11 +5,12 @@
 //   rule_name = alternative | alternative | alternative
 //
 // An alternative is plain text that may contain <other_rule> references,
-// which get expanded recursively at generation time. An alternative may
-// end in `:N` to weight it N times as heavily as an unweighted one, e.g.
-// `common:5 | rare`. Every error carries the exact line and column of the
-// character that caused it, plus the source line itself, so a typo points
-// straight back at the file.
+// which get expanded recursively at generation time, and [a-z] character
+// classes, which expand to a single random character from the listed set
+// at generation time. An alternative may end in `:N` to weight it N times
+// as heavily as an unweighted one, e.g. `common:5 | rare`. Every error
+// carries the exact line and column of the character that caused it, plus
+// the source line itself, so a typo points straight back at the file.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -39,6 +40,7 @@ pub enum Part {
         line: usize,
         column: usize,
     },
+    CharClass(Vec<char>),
 }
 
 #[derive(Debug)]
@@ -303,6 +305,39 @@ fn parse_parts(
             });
         }
 
+        if c == '[' {
+            if !literal.is_empty() {
+                parts.push(Part::Literal(std::mem::take(&mut literal)));
+            }
+            let mut j = i + 1;
+            let mut content = String::new();
+            while j < chars.len() && chars[j].1 != ']' {
+                content.push(chars[j].1);
+                j += 1;
+            }
+            if j >= chars.len() {
+                return Err(GrammarError {
+                    line: line_no,
+                    column: col,
+                    message: "unterminated character class - missing closing ']'".to_string(),
+                    line_text: raw_line.to_string(),
+                });
+            }
+            let class_chars = parse_char_class(&content, col + 1, col, line_no, raw_line)?;
+            parts.push(Part::CharClass(class_chars));
+            i = j + 1;
+            continue;
+        }
+
+        if c == ']' {
+            return Err(GrammarError {
+                line: line_no,
+                column: col,
+                message: "unexpected ']' without matching '['".to_string(),
+                line_text: raw_line.to_string(),
+            });
+        }
+
         literal.push(c);
         i += 1;
     }
@@ -312,6 +347,58 @@ fn parse_parts(
     }
 
     Ok(parts)
+}
+
+// `content` is everything between `[` and `]`. `content_col_offset` is the
+// column of content's first character, used to point at the exact spot in
+// a range like [z-a]; `bracket_col` is the column of the `[` itself, used
+// for errors about the class as a whole.
+fn parse_char_class(
+    content: &str,
+    content_col_offset: usize,
+    bracket_col: usize,
+    line_no: usize,
+    raw_line: &str,
+) -> Result<Vec<char>, GrammarError> {
+    if content.is_empty() {
+        return Err(GrammarError {
+            line: line_no,
+            column: bracket_col,
+            message: "empty character class '[]' - list characters or a range like [a-z]"
+                .to_string(),
+            line_text: raw_line.to_string(),
+        });
+    }
+
+    let chars: Vec<(usize, char)> = content.char_indices().collect();
+    let mut set = Vec::new();
+    let mut i = 0;
+
+    while i < chars.len() {
+        if i + 2 < chars.len() && chars[i + 1].1 == '-' {
+            let (byte_pos, start) = chars[i];
+            let end = chars[i + 2].1;
+            if end < start {
+                return Err(GrammarError {
+                    line: line_no,
+                    column: content_col_offset + byte_pos,
+                    message: format!(
+                        "invalid character range '{start}-{end}' - start must not come after end"
+                    ),
+                    line_text: raw_line.to_string(),
+                });
+            }
+            for c in start..=end {
+                set.push(c);
+            }
+            i += 3;
+        } else {
+            set.push(chars[i].1);
+            i += 1;
+        }
+    }
+
+    Ok(set)
 }
 
 fn is_valid_identifier(s: &str) -> bool {
