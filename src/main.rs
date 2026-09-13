@@ -10,6 +10,44 @@ struct Args {
     start: String,
     count: usize,
     seed: Option<u64>,
+    format: Format,
+}
+
+#[derive(Clone, Copy)]
+enum Format {
+    None,
+    Upper,
+    Lower,
+    Capitalize,
+}
+
+impl Format {
+    fn parse(raw: &str) -> Result<Format, String> {
+        match raw {
+            "none" => Ok(Format::None),
+            "upper" => Ok(Format::Upper),
+            "lower" => Ok(Format::Lower),
+            "capitalize" => Ok(Format::Capitalize),
+            other => Err(format!(
+                "--format expects one of: none, upper, lower, capitalize (got '{other}')"
+            )),
+        }
+    }
+
+    fn apply(self, name: &str) -> String {
+        match self {
+            Format::None => name.to_string(),
+            Format::Upper => name.to_uppercase(),
+            Format::Lower => name.to_lowercase(),
+            Format::Capitalize => {
+                let mut chars = name.chars();
+                match chars.next() {
+                    Some(first) => first.to_uppercase().chain(chars).collect(),
+                    None => String::new(),
+                }
+            }
+        }
+    }
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -18,6 +56,7 @@ fn parse_args() -> Result<Args, String> {
     let mut start = "name".to_string();
     let mut count = 10usize;
     let mut seed = None;
+    let mut format = Format::None;
 
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -41,6 +80,10 @@ fn parse_args() -> Result<Args, String> {
                         .map_err(|_| format!("--seed expects an unsigned integer, got '{raw}'"))?,
                 );
             }
+            "--format" => {
+                let raw = argv.next().ok_or("--format requires a value")?;
+                format = Format::parse(&raw)?;
+            }
             other if path.is_none() && !other.starts_with('-') => {
                 path = Some(other.to_string());
             }
@@ -56,16 +99,20 @@ fn parse_args() -> Result<Args, String> {
         start,
         count,
         seed,
+        format,
     })
 }
 
 fn print_usage() {
     eprintln!("namegen - generate random names from a grammar file\n");
-    eprintln!("usage: namegen <grammar-file> [--start <rule>] [--count <n>] [--seed <n>]\n");
+    eprintln!(
+        "usage: namegen <grammar-file> [--start <rule>] [--count <n>] [--seed <n>] [--format <mode>]\n"
+    );
     eprintln!("  <grammar-file>   path to a .namegen grammar file");
     eprintln!("  --start <rule>   rule to expand first (default: name)");
     eprintln!("  --count <n>      how many names to generate (default: 10)");
     eprintln!("  --seed <n>       fix the random seed for reproducible output");
+    eprintln!("  --format <mode>  casing to apply: none, upper, lower, capitalize (default: none)");
 }
 
 fn main() -> ExitCode {
@@ -112,7 +159,7 @@ fn main() -> ExitCode {
 
     for _ in 0..args.count {
         match generate::generate(&grammar, &args.start, &mut rng) {
-            Ok(name) => println!("{name}"),
+            Ok(name) => println!("{}", args.format.apply(&name)),
             Err(e) => {
                 eprintln!("error: {e}");
                 return ExitCode::FAILURE;

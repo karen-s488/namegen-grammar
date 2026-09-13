@@ -65,13 +65,18 @@ cargo run -- examples/fantasy.namegen --count 10
 ```
 
 ```
-namegen <grammar-file> [--start <rule>] [--count <n>] [--seed <n>]
+namegen <grammar-file> [--start <rule>] [--count <n>] [--seed <n>] [--format <mode>]
 
   <grammar-file>   path to a .namegen grammar file
   --start <rule>   rule to expand first (default: name)
   --count <n>      how many names to generate (default: 10)
   --seed <n>       fix the random seed for reproducible output
+  --format <mode>  casing to apply: none, upper, lower, capitalize (default: none)
 ```
+
+`--format capitalize` uppercases just the first character of each generated
+name and leaves the rest alone, so `<syllable>'<syllable>` output like
+`ka'ki` becomes `Ka'ki` rather than `Ka'Ki`.
 
 ## Error messages
 
@@ -101,6 +106,6 @@ cargo build --release
 ## Status
 
 Early. The grammar format above, including weighted alternatives and
-character classes, is what's implemented so far. Casing flags and a
-`--unique` output filter are next - see the issues, or just read
+character classes, is what's implemented so far, plus `--format` for
+casing. A `--unique` output filter is next - see the issues, or just read
 `src/grammar.rs`.
